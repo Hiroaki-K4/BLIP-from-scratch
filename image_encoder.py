@@ -1,30 +1,31 @@
+import timm
 import torch
 import torch.nn as nn
-from timm.models.vision_transformer import VisionTransformer
 
 
 class BLIPImageEncoder(nn.Module):
     def __init__(
-        self, img_size=224, patch_size=16, embed_dim=768, depth=12, num_heads=12
+        self,
+        model_name="vit_base_patch16_224",
+        hidden_dim=768,
+        embed_dim=256,
+        pretrained=True,
     ):
         super().__init__()
-        self.visual_encoder = VisionTransformer(
-            img_size=img_size,
-            patch_size=patch_size,
-            embed_dim=embed_dim,
-            depth=depth,
-            num_heads=num_heads,
-            num_classes=0,
+        self.visual_encoder = timm.create_model(
+            model_name, pretrained=pretrained, num_classes=0
         )
+        self.vision_proj = nn.Linear(hidden_dim, embed_dim)
 
     def forward(self, x):
-        return self.visual_encoder.forward_features(x)
+        image_embeds = self.visual_encoder.forward_features(x)
+        return self.vision_proj(image_embeds[:, 0, :])
 
 
 if __name__ == "__main__":
-    model = BLIPImageEncoder()
+    model = BLIPImageEncoder(pretrained=True)
+    model.eval()
     dummy_img = torch.randn(1, 3, 224, 224)
-    features = model(dummy_img)
-    print(
-        f"Feature shape: {features.shape}"
-    )  # [1, 197, 768] (196 patches + 1 cls token)
+    with torch.no_grad():
+        features = model(dummy_img)
+    print(f"Feature shape: {features.shape}")  # [1, 197, 256]
