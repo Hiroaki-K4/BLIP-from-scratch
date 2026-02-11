@@ -20,10 +20,9 @@ def train(max_steps=500, batch_size=12, learning_rate=1e-3):
     train_iter = itertools.islice(dataloader, max_steps)
 
     model.train()
-    pbar = tqdm(enumerate(train_iter), total=max_steps, desc="Training")
 
     total_loss = 0
-    for i, (images, input_ids, attention_mask) in pbar:
+    for i, (images, input_ids, attention_mask) in enumerate(train_iter):
         images = images.to(device)
         input_ids = input_ids.to(device)
         attention_mask = attention_mask.to(device)
@@ -43,9 +42,8 @@ def train(max_steps=500, batch_size=12, learning_rate=1e-3):
 
         current_loss = loss.item()
         total_loss += current_loss
-        pbar.set_postfix(
-            {"loss": f"{current_loss:.4f}", "avg_loss": f"{total_loss/(i+1):.4f}"}
-        )
+        if i % 100 == 0:
+            print(f"Step: {i}/{max_steps}, Loss: {current_loss:.4f}, Avg loss: {total_loss/(i+1):.4f}")
 
     save_path = f"blip_itc_steps{max_steps}.pth"
     torch.save(model.state_dict(), save_path)
@@ -53,4 +51,4 @@ def train(max_steps=500, batch_size=12, learning_rate=1e-3):
 
 
 if __name__ == "__main__":
-    train(max_steps=1000, batch_size=32)
+    train(max_steps=10000, batch_size=4)
