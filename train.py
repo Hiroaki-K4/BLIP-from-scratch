@@ -9,7 +9,7 @@ from blip_itc import BLIP_ITC_MODEL
 from dataloader import get_dataloader
 
 
-def train(max_steps=500, batch_size=12, learning_rate=1e-3):
+def train(max_steps=500, batch_size=12, learning_rate=1e-4):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device} | Max Steps: {max_steps}")
     model = BLIP_ITC_MODEL().to(device)

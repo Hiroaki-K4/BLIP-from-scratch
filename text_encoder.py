@@ -7,10 +7,11 @@ class BLIPTextEncoder(nn.Module):
     def __init__(self, model_name="bert-base-uncased", hidden_dim=768, embed_dim=256):
         super().__init__()
 
-        # Customize BERT setup
+        # Use standard BERT config for ITC task (bidirectional attention)
         self.config = BertConfig.from_pretrained(model_name)
-        self.config.add_cross_attention = True
-        self.config.is_decoder = True
+        # For ITC task, we don't need cross-attention or decoder mode
+        # self.config.add_cross_attention = True
+        # self.config.is_decoder = True
 
         self.bert = BertModel.from_pretrained(model_name, config=self.config)
         self.text_proj = nn.Linear(hidden_dim, embed_dim)
