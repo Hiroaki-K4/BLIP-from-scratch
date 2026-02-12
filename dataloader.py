@@ -12,7 +12,7 @@ def get_dataloader(tokenizer, batch_size=8, split="train"):
             transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
         ]
     )
-    dataset = load_dataset("jxie/coco_captions", split, streaming=True)
+    dataset = load_dataset("jxie/coco_captions", split=split, streaming=True)
 
     def collate_fn(batch):
         images = []
