@@ -9,9 +9,6 @@ class BLIPTextEncoder(nn.Module):
 
         # Use standard BERT config for ITC task (bidirectional attention)
         self.config = BertConfig.from_pretrained(model_name)
-        # For ITC task, we don't need cross-attention or decoder mode
-        # self.config.add_cross_attention = True
-        # self.config.is_decoder = True
 
         self.bert = BertModel.from_pretrained(model_name, config=self.config)
         self.text_proj = nn.Linear(hidden_dim, embed_dim)

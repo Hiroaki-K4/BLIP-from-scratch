@@ -5,13 +5,24 @@ from torchvision import transforms
 
 
 def get_dataloader(tokenizer, batch_size=8, split="train"):
-    transform = transforms.Compose(
-        [
-            transforms.Resize((224, 224)),
-            transforms.ToTensor(),
-            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
-        ]
-    )
+    if split == "train":
+        # Random crop
+        transform = transforms.Compose(
+            [
+                transforms.RandomResizedCrop(224, scale=(0.8, 1.0)),
+                transforms.RandomHorizontalFlip(p=0.5),
+                transforms.ToTensor(),
+                transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+            ]
+        )
+    else:
+        transform = transforms.Compose(
+            [
+                transforms.Resize((224, 224)),
+                transforms.ToTensor(),
+                transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+            ]
+        )
     dataset = load_dataset("jxie/coco_captions", split=split, streaming=True)
 
     def collate_fn(batch):
