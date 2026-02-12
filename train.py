@@ -113,6 +113,6 @@ if __name__ == "__main__":
         save_path="best_blip_itc_model.pth",
         max_steps=10000,
         batch_size=32,
-        val_interval=100,
+        val_interval=200,
         patience=2,
     )
