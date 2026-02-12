@@ -49,7 +49,9 @@ def train(
     train_loader = get_dataloader(
         tokenizer=tokenizer, batch_size=batch_size, split="train"
     )
-    val_loader = get_dataloader(tokenizer=tokenizer, batch_size=batch_size, split="val")
+    val_loader = get_dataloader(
+        tokenizer=tokenizer, batch_size=batch_size, split="validation"
+    )
     train_iter = itertools.islice(train_loader, max_steps)
 
     # Variables for Early Stopping
