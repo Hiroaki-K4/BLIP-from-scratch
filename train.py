@@ -104,8 +104,8 @@ def train(
         # Positive pair
         itm_output_pos = model(images, input_ids, attention_mask, mode="itm")
         # Negative pair
-        input_ids_neg = torch.roll(input_ids, shifts=1, dim=0)
-        attn_mask_neg = torch.roll(attention_mask, shifts=1, dim=0)
+        input_ids_neg = torch.roll(input_ids, shifts=1, dims=0)
+        attn_mask_neg = torch.roll(attention_mask, shifts=1, dims=0)
         itm_output_neg = model(images, input_ids_neg, attn_mask_neg, mode="itm")
 
         # Combine logits and labels
