@@ -36,6 +36,7 @@ def train(
     max_steps=500,
     batch_size=12,
     learning_rate=1e-4,
+    weight_decay=0.05,
     val_interval=200,
     patience=3,
 ):
@@ -43,7 +44,9 @@ def train(
     print(f"Using device: {device}")
 
     model = BLIP_ITC_MODEL().to(device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.AdamW(
+        model.parameters(), lr=learning_rate, weight_decay=weight_decay
+    )
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
 
     train_loader = get_dataloader(
@@ -113,6 +116,7 @@ if __name__ == "__main__":
         save_path="best_blip_itc_model.pth",
         max_steps=10000,
         batch_size=32,
+        weight_decay=0.05,
         val_interval=200,
         patience=3,
     )
