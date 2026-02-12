@@ -4,7 +4,7 @@ import torch
 import torch.nn.functional as F
 from transformers import BertTokenizer
 
-from blip_itc import BLIP_ITC_MODEL
+from blip import BLIP_MODEL
 from dataloader import get_dataloader
 
 
@@ -20,19 +20,41 @@ def validate(model, dataloader, device, num_val_steps=50):
                 input_ids.to(device),
                 attention_mask.to(device),
             )
-            sim_i2t, sim_t2i = model(images, input_ids, attention_mask)
-            targets = torch.arange(images.size(0)).to(device)
+            batch_size = images.size(0)
 
+            # ITC loss
+            sim_i2t, sim_t2i = model(images, input_ids, attention_mask, mode="itc")
+            targets = torch.arange(batch_size).to(device)
             loss_i2t = F.cross_entropy(sim_i2t, targets)
             loss_t2i = F.cross_entropy(sim_t2i, targets)
-            val_loss += (loss_i2t + loss_t2i) / 2
+            loss_itc = (loss_i2t + loss_t2i) / 2
+
+            # ITM loss
+            # Positive
+            itm_output_pos = model(images, input_ids, attention_mask, mode="itm")
+            # Negative
+            input_ids_neg = torch.roll(input_ids, shifts=1, dims=0)
+            attn_mask_neg = torch.roll(attention_mask, shifts=1, dims=0)
+            itm_output_neg = model(images, input_ids_neg, attn_mask_neg, mode="itm")
+
+            itm_logits = torch.cat([itm_output_pos, itm_output_neg], dim=0)
+            itm_labels = torch.cat(
+                [
+                    torch.ones(batch_size, dtype=torch.long),
+                    torch.zeros(batch_size, dtype=torch.long),
+                ],
+                dim=0,
+            ).to(device)
+            loss_itm = F.cross_entropy(itm_logits, itm_labels)
+
+            val_loss += (loss_itc + loss_itm).item()
 
     model.train()
-    return (val_loss / num_val_steps).item()
+    return val_loss / num_val_steps
 
 
 def train(
-    save_path="best_blip_itc_model.pth",
+    save_path="best_blip_model.pth",
     max_steps=500,
     batch_size=12,
     learning_rate=1e-4,
@@ -43,7 +65,7 @@ def train(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    model = BLIP_ITC_MODEL().to(device)
+    model = BLIP_MODEL().to(device)
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=learning_rate, weight_decay=weight_decay
     )
@@ -71,12 +93,34 @@ def train(
             attention_mask.to(device),
         )
 
-        # Forward & Update
-        sim_i2t, sim_t2i = model(images, input_ids, attention_mask)
+        # ITC forward
+        sim_i2t, sim_t2i = model(images, input_ids, attention_mask, mode="itc")
         targets = torch.arange(images.size(0)).to(device)
-        loss = (
+        loss_itc = (
             F.cross_entropy(sim_i2t, targets) + F.cross_entropy(sim_t2i, targets)
         ) / 2
+
+        # ITM forward
+        # Positive pair
+        itm_output_pos = model(images, input_ids, attention_mask, mode="itm")
+        # Negative pair
+        input_ids_neg = torch.roll(input_ids, shifts=1, dim=0)
+        attn_mask_neg = torch.roll(attention_mask, shifts=1, dim=0)
+        itm_output_neg = model(images, input_ids_neg, attn_mask_neg, mode="itm")
+
+        # Combine logits and labels
+        itm_logits = torch.cat([itm_output_pos, itm_output_neg], dim=0)  # [B*2, 2]
+        itm_labels = torch.cat(
+            [
+                torch.ones(batch_size, dtype=torch.long),  # Match: 1
+                torch.zeros(batch_size, dtype=torch.long),  # No Match: 0
+            ],
+            dim=0,
+        ).to(device)
+
+        loss_itm = F.cross_entropy(itm_logits, itm_labels)
+
+        loss = loss_itc + loss_itm
 
         optimizer.zero_grad()
         loss.backward()
@@ -113,7 +157,7 @@ def train(
 
 if __name__ == "__main__":
     train(
-        save_path="best_blip_itc_model.pth",
+        save_path="best_blip_model.pth",
         max_steps=10000,
         batch_size=32,
         weight_decay=0.05,

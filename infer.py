@@ -4,11 +4,11 @@ from PIL import Image
 from torchvision import transforms
 from transformers import BertTokenizer
 
-from blip_itc import BLIP_ITC_MODEL
+from blip import BLIP_MODEL
 
 
 def load_model(model_path, device):
-    model = BLIP_ITC_MODEL()
+    model = BLIP_MODEL()
     state_dict = torch.load(model_path, map_location=device)
     model.load_state_dict(state_dict)
     model.to(device)
@@ -56,7 +56,7 @@ def itc_inference(model_path, image_path, text_candidates):
 
 
 if __name__ == "__main__":
-    model_path = "best_blip_itc_model.pth"
+    model_path = "best_blip_model.pth"
     image_path = "original/caption.jpg"
     text_candidates = [
         "A man is petting a dog in a barn",

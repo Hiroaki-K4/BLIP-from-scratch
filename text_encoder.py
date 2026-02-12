@@ -7,11 +7,13 @@ class BLIPTextEncoder(nn.Module):
     def __init__(self, model_name="bert-base-uncased", hidden_dim=768, embed_dim=256):
         super().__init__()
 
-        # Use standard BERT config for ITC task (bidirectional attention)
         self.config = BertConfig.from_pretrained(model_name)
+        self.config.add_cross_attention = True
+        self.config.is_decoder = True
 
         self.bert = BertModel.from_pretrained(model_name, config=self.config)
         self.text_proj = nn.Linear(hidden_dim, embed_dim)
+        self.itm_head = nn.Linear(hidden_dim, 2)
 
     def forward(self, input_ids, attention_mask, visual_embeds=None, mode="itc"):
         """
@@ -27,9 +29,8 @@ class BLIPTextEncoder(nn.Module):
                 input_ids=input_ids,
                 attention_mask=attention_mask,
                 encoder_hidden_states=visual_embeds,
-                return_dict=True,
             )
-            return outputs.last_hidden_state
+            return self.itm_head(outputs.last_hidden_state[:, 0, :])
 
 
 if __name__ == "__main__":
@@ -52,4 +53,4 @@ if __name__ == "__main__":
         visual_embeds=dummy_visual_embeds,
         mode="itm",
     )
-    print(f"ITM Feature Shape: {multimodal_feat.shape}")  # [1, seq_len, 768]
+    print(f"ITM Feature Shape: {multimodal_feat.shape}")  # [1, 2]
