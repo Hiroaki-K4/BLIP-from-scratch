@@ -114,5 +114,5 @@ if __name__ == "__main__":
         max_steps=10000,
         batch_size=32,
         val_interval=200,
-        patience=2,
+        patience=3,
     )
