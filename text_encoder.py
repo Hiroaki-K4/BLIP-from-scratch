@@ -7,13 +7,30 @@ class BLIPTextEncoder(nn.Module):
     def __init__(self, model_name="bert-base-uncased", hidden_dim=768, embed_dim=256):
         super().__init__()
 
-        self.config = BertConfig.from_pretrained(model_name)
-        self.config.add_cross_attention = True
-        self.config.is_decoder = True
+        self.base_bert = BertModel.from_pretrained(model_name)
 
-        self.bert = BertModel.from_pretrained(model_name, config=self.config)
+        itm_config = BertConfig.from_pretrained(model_name)
+        itm_config.add_cross_attention = True
+        itm_config.is_decoder = True
+        self.itm_bert = BertModel.from_pretrained(model_name, config=itm_config)
+
+        self._share_weights()
+
         self.text_proj = nn.Linear(hidden_dim, embed_dim)
         self.itm_head = nn.Linear(hidden_dim, 2)
+
+    def _share_weights(self):
+        """Share weights except cross attention"""
+        self.itm_bert.embeddings = self.base_bert.embeddings
+
+        for base_layer, itm_layer in zip(
+            self.base_bert.encoder.layer, self.itm_bert.encoder.layer
+        ):
+            itm_layer.attention.self = base_layer.attention.self
+            itm_layer.attention.output = base_layer.attention.output
+
+            itm_layer.intermediate = base_layer.intermediate
+            itm_layer.output = base_layer.output
 
     def forward(self, input_ids, attention_mask, visual_embeds=None, mode="itc"):
         """
