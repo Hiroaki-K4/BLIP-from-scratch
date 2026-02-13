@@ -17,7 +17,7 @@ def load_model(model_path, device):
     return model
 
 
-def itc_inference(model_path, image_path, text_candidates):
+def inference(model_path, image_path, text_candidates, mode="itc"):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model = load_model(model_path, device)
@@ -39,29 +39,71 @@ def itc_inference(model_path, image_path, text_candidates):
     inputs = tokenizer(text_candidates, padding=True, return_tensors="pt").to(device)
 
     with torch.no_grad():
-        num_texts = len(text_candidates)
-        expanded_images = image_tensor.repeat(num_texts, 1, 1, 1)
+        if mode == "itc":
+            # ITC mode: Image-Text Contrastive
+            sim_i2t, _ = model(
+                image_tensor, inputs.input_ids, inputs.attention_mask, mode="itc"
+            )
+            logits = sim_i2t[0]  # (num_texts,)
+            probs = F.softmax(logits, dim=-1)
 
-        sim_i2t, _ = model(expanded_images, inputs.input_ids, inputs.attention_mask)
+        elif mode == "itm":
+            # ITM mode: Image-Text Matching
+            # Process each text-image pair individually for proper discrimination
+            # Batch processing causes identical scores due to cross-attention interference
+            itm_scores = []
+            for i, text in enumerate(text_candidates):
+                text_input_ids = inputs.input_ids[i : i + 1]  # Single text
+                text_attention_mask = inputs.attention_mask[i : i + 1]  # Single text
 
-        logits = sim_i2t[0]
-        probs = F.softmax(logits, dim=-1)
+                itm_output = model(
+                    image_tensor, text_input_ids, text_attention_mask, mode="itm"
+                )
 
-    print(f"\n--- Inference Result ({image_path}) ---")
+                # Use raw matching logit to preserve subtle but meaningful differences
+                # ITM outputs [no_match_logit, match_logit] - we want the match score
+                matching_logit = itm_output[
+                    0, 1
+                ].item()  # Raw matching logit (can be negative)
+                itm_scores.append(matching_logit)
+
+            probs = torch.tensor(itm_scores)  # Raw logits preserve discrimination
+
+    print(f"\n--- {mode.upper()} Inference Result ({image_path}) ---")
     for i, text in enumerate(text_candidates):
         print(f"Score: {probs[i].item():.4f} | Text: {text}")
 
     best_idx = probs.argmax().item()
     print(f"\nBest Match: {text_candidates[best_idx]}")
+    return probs
 
 
 if __name__ == "__main__":
     model_path = "best_blip_model.pth"
     image_path = "original/caption.jpg"
     text_candidates = [
-        "A man is petting a dog in a barn",
         "A sunset over the ocean",
+        "A man petting a dog near garlic boxes",
         "A person riding a bicycle",
         "A futuristic city with flying cars",
     ]
-    itc_inference(model_path, image_path, text_candidates)
+
+    print("====== BLIP Inference Test ======")
+
+    # ITC mode inference
+    print("\n🔍 ITC (Image-Text Contrastive) Mode:")
+    itc_probs = inference(model_path, image_path, text_candidates, mode="itc")
+
+    # ITM mode inference
+    print("\n🤖 ITM (Image-Text Matching) Mode:")
+    itm_probs = inference(model_path, image_path, text_candidates, mode="itm")
+
+    # Comparison results
+    print("\n📊 Comparison Results:")
+    print("Text Candidate | ITC Score | ITM Score")
+    print("-" * 45)
+    for i, text in enumerate(text_candidates):
+        print(f"{text:<25} | {itc_probs[i].item():.4f}   | {itm_probs[i].item():.4f}")
+
+    print(f"\nITC Best Match: {text_candidates[itc_probs.argmax()]}")
+    print(f"ITM Best Match: {text_candidates[itm_probs.argmax()]}")
