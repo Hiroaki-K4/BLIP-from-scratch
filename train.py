@@ -159,7 +159,7 @@ if __name__ == "__main__":
     train(
         save_path="best_blip_model.pth",
         max_steps=10000,
-        batch_size=32,
+        batch_size=16,
         weight_decay=0.05,
         val_interval=200,
         patience=3,
