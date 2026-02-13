@@ -38,11 +38,11 @@ class BLIPTextEncoder(nn.Module):
         mode 'itm': Inject image features and extract fusion features from text and images
         """
         if mode == "itc":
-            outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
+            outputs = self.base_bert(input_ids=input_ids, attention_mask=attention_mask)
             last_hidden_state = outputs.last_hidden_state[:, 0, :]
             return self.text_proj(last_hidden_state)
         elif mode == "itm":
-            outputs = self.bert(
+            outputs = self.itm_bert(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
                 encoder_hidden_states=visual_embeds,
