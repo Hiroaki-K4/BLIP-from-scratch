@@ -8,6 +8,58 @@ from blip import BLIP
 from dataloader import get_dataloader
 
 
+def compute_losses(model, images, input_ids, attention_mask, device):
+    """Compute all losses (ITC, ITM, LM) for given batch"""
+    batch_size = images.size(0)
+
+    # ITC loss
+    sim_i2t, sim_t2i = model(images, input_ids, attention_mask, mode="itc")
+    targets = torch.arange(batch_size).to(device)
+    loss_i2t = F.cross_entropy(sim_i2t, targets)
+    loss_t2i = F.cross_entropy(sim_t2i, targets)
+    loss_itc = (loss_i2t + loss_t2i) / 2
+
+    # ITM loss
+    # Positive pair
+    itm_output_pos = model(images, input_ids, attention_mask, mode="itm")
+    # Negative pair
+    input_ids_neg = torch.roll(input_ids, shifts=1, dims=0)
+    attn_mask_neg = torch.roll(attention_mask, shifts=1, dims=0)
+    itm_output_neg = model(images, input_ids_neg, attn_mask_neg, mode="itm")
+
+    # Combine logits and labels
+    itm_logits = torch.cat([itm_output_pos, itm_output_neg], dim=0)
+    itm_labels = torch.cat(
+        [
+            torch.ones(batch_size, dtype=torch.long),
+            torch.zeros(batch_size, dtype=torch.long),
+        ],
+        dim=0,
+    ).to(device)
+    loss_itm = F.cross_entropy(itm_logits, itm_labels)
+
+    # LM loss (Language Modeling)
+    # Create labels for language modeling (shifted input_ids)
+    lm_labels = input_ids.clone()
+    lm_labels[:, 0] = -100  # Ignore [CLS] token
+    lm_labels[attention_mask == 0] = -100  # Ignore padding tokens
+
+    # Get LM predictions
+    lm_logits = model(images, input_ids, attention_mask, mode="lm")
+    # Shift logits and labels for next token prediction
+    shift_logits = lm_logits[:, :-1, :].contiguous()
+    shift_labels = lm_labels[:, 1:].contiguous()
+
+    # Calculate language modeling loss
+    loss_lm = F.cross_entropy(
+        shift_logits.view(-1, shift_logits.size(-1)),
+        shift_labels.view(-1),
+        ignore_index=-100,
+    )
+
+    return loss_itc, loss_itm, loss_lm
+
+
 def validate(model, dataloader, device, num_val_steps=50):
     """Calculate loss for validation data"""
     model.eval()
@@ -20,34 +72,13 @@ def validate(model, dataloader, device, num_val_steps=50):
                 input_ids.to(device),
                 attention_mask.to(device),
             )
-            batch_size = images.size(0)
 
-            # ITC loss
-            sim_i2t, sim_t2i = model(images, input_ids, attention_mask, mode="itc")
-            targets = torch.arange(batch_size).to(device)
-            loss_i2t = F.cross_entropy(sim_i2t, targets)
-            loss_t2i = F.cross_entropy(sim_t2i, targets)
-            loss_itc = (loss_i2t + loss_t2i) / 2
+            # Compute all losses using the shared function
+            loss_itc, loss_itm, loss_lm = compute_losses(
+                model, images, input_ids, attention_mask, device
+            )
 
-            # ITM loss
-            # Positive
-            itm_output_pos = model(images, input_ids, attention_mask, mode="itm")
-            # Negative
-            input_ids_neg = torch.roll(input_ids, shifts=1, dims=0)
-            attn_mask_neg = torch.roll(attention_mask, shifts=1, dims=0)
-            itm_output_neg = model(images, input_ids_neg, attn_mask_neg, mode="itm")
-
-            itm_logits = torch.cat([itm_output_pos, itm_output_neg], dim=0)
-            itm_labels = torch.cat(
-                [
-                    torch.ones(batch_size, dtype=torch.long),
-                    torch.zeros(batch_size, dtype=torch.long),
-                ],
-                dim=0,
-            ).to(device)
-            loss_itm = F.cross_entropy(itm_logits, itm_labels)
-
-            val_loss += (loss_itc + loss_itm).item()
+            val_loss += (loss_itc + loss_itm + loss_lm).item()
 
     model.train()
     return val_loss / num_val_steps
@@ -93,34 +124,13 @@ def train(
             attention_mask.to(device),
         )
 
-        # ITC forward
-        sim_i2t, sim_t2i = model(images, input_ids, attention_mask, mode="itc")
-        targets = torch.arange(images.size(0)).to(device)
-        loss_itc = (
-            F.cross_entropy(sim_i2t, targets) + F.cross_entropy(sim_t2i, targets)
-        ) / 2
+        # Compute all losses using the shared function
+        loss_itc, loss_itm, loss_lm = compute_losses(
+            model, images, input_ids, attention_mask, device
+        )
 
-        # ITM forward
-        # Positive pair
-        itm_output_pos = model(images, input_ids, attention_mask, mode="itm")
-        # Negative pair
-        input_ids_neg = torch.roll(input_ids, shifts=1, dims=0)
-        attn_mask_neg = torch.roll(attention_mask, shifts=1, dims=0)
-        itm_output_neg = model(images, input_ids_neg, attn_mask_neg, mode="itm")
-
-        # Combine logits and labels
-        itm_logits = torch.cat([itm_output_pos, itm_output_neg], dim=0)  # [B*2, 2]
-        itm_labels = torch.cat(
-            [
-                torch.ones(batch_size, dtype=torch.long),  # Match: 1
-                torch.zeros(batch_size, dtype=torch.long),  # No Match: 0
-            ],
-            dim=0,
-        ).to(device)
-
-        loss_itm = F.cross_entropy(itm_logits, itm_labels)
-
-        loss = loss_itc + loss_itm
+        # Total loss: combine all three losses
+        loss = loss_itc + loss_itm + loss_lm
 
         optimizer.zero_grad()
         loss.backward()
@@ -134,6 +144,9 @@ def train(
 
             print(
                 f"\nStep: {i} | Train Loss: {avg_train_loss:.4f} | Val Loss: {current_val_loss:.4f}"
+            )
+            print(
+                f"  ITC Loss: {loss_itc.item():.4f} | ITM Loss: {loss_itm.item():.4f} | LM Loss: {loss_lm.item():.4f}"
             )
 
             # Early Stopping

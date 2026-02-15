@@ -27,8 +27,12 @@ class BLIP(nn.Module):
             sim_i2t = image_feat @ text_feat.t() * t
             sim_t2i = text_feat @ image_feat.t() * t
             return sim_i2t, sim_t2i
-
         elif mode == "itm":
             return self.text_encoder(
                 input_ids, attention_mask, visual_embeds=image_embeds, mode="itm"
+            )
+        elif mode == "lm":
+            # Language Model mode: Generate text conditioned on image
+            return self.text_encoder(
+                input_ids, attention_mask, visual_embeds=image_embeds, mode="lm"
             )

@@ -8,29 +8,41 @@ class BLIPModel(nn.Module):
         super().__init__()
 
         self.base_bert = BertModel.from_pretrained(model_name)
+        self.config = self.base_bert.config
 
-        itm_config = BertConfig.from_pretrained(model_name)
-        itm_config.add_cross_attention = True
-        itm_config.is_decoder = True
-        self.itm_bert = BertModel.from_pretrained(model_name, config=itm_config)
+        common_config = BertConfig.from_pretrained(model_name)
+        common_config.add_cross_attention = True
+        common_config.is_decoder = True
+        self.itm_bert = BertModel.from_pretrained(model_name, config=common_config)
+
+        self.text_decoder = BertModel.from_pretrained(model_name, config=common_config)
 
         self._share_weights()
 
         self.text_proj = nn.Linear(hidden_dim, embed_dim)
         self.itm_head = nn.Linear(hidden_dim, 2)
+        self.lm_head = nn.Linear(hidden_dim, self.config.vocab_size)
 
     def _share_weights(self):
         """Share weights except cross attention"""
         self.itm_bert.embeddings = self.base_bert.embeddings
+        self.text_decoder.embeddings = self.base_bert.embeddings
 
-        for base_layer, itm_layer in zip(
-            self.base_bert.encoder.layer, self.itm_bert.encoder.layer
-        ):
+        for i in range(len(self.base_bert.encoder.layer)):
+            base_layer = self.base_bert.encoder.layer[i]
+            itm_layer = self.itm_bert.encoder.layer[i]
+            dec_layer = self.text_decoder.encoder.layer[i]
+
+            # Share layers except cross attention between ITC and ITM
             itm_layer.attention.self = base_layer.attention.self
             itm_layer.attention.output = base_layer.attention.output
-
             itm_layer.intermediate = base_layer.intermediate
             itm_layer.output = base_layer.output
+
+            # Share cross attention between ITM and decoder
+            dec_layer.intermediate = base_layer.intermediate
+            dec_layer.output = base_layer.output
+            dec_layer.crossattention = itm_layer.crossattention
 
     def forward(self, input_ids, attention_mask, visual_embeds=None, mode="itc"):
         """
@@ -48,6 +60,13 @@ class BLIPModel(nn.Module):
                 encoder_hidden_states=visual_embeds,
             )
             return self.itm_head(outputs.last_hidden_state[:, 0, :])
+        elif mode == "lm":
+            outputs = self.text_decoder(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                encoder_hidden_states=visual_embeds,
+            )
+            return self.lm_head(outputs.last_hidden_state)
 
 
 if __name__ == "__main__":
@@ -71,3 +90,12 @@ if __name__ == "__main__":
         mode="itm",
     )
     print(f"ITM Feature Shape: {multimodal_feat.shape}")  # [1, 2]
+
+    # 3. LM mode
+    lm_logits = model(
+        inputs.input_ids,
+        inputs.attention_mask,
+        visual_embeds=dummy_visual_embeds,
+        mode="lm",
+    )
+    print(f"LM Logits Shape: {lm_logits.shape}")  # [1, seq_len, vocab_size]
