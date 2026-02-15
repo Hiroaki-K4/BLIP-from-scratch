@@ -4,7 +4,7 @@ import torch
 import torch.nn.functional as F
 from transformers import BertTokenizer
 
-from blip import BLIP_MODEL
+from blip import BLIP
 from dataloader import get_dataloader
 
 
@@ -65,7 +65,7 @@ def train(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    model = BLIP_MODEL().to(device)
+    model = BLIP().to(device)
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=learning_rate, weight_decay=weight_decay
     )

@@ -4,11 +4,11 @@ from PIL import Image
 from torchvision import transforms
 from transformers import BertTokenizer
 
-from blip import BLIP_MODEL
+from blip import BLIP
 
 
 def load_model(model_path, device):
-    model = BLIP_MODEL()
+    model = BLIP()
     state_dict = torch.load(model_path, map_location=device)
     model.load_state_dict(state_dict)
     model.to(device)

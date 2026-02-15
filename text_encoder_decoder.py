@@ -3,7 +3,7 @@ import torch.nn as nn
 from transformers import BertConfig, BertModel, BertTokenizer
 
 
-class BLIPTextEncoder(nn.Module):
+class BLIPModel(nn.Module):
     def __init__(self, model_name="bert-base-uncased", hidden_dim=768, embed_dim=256):
         super().__init__()
 
@@ -53,7 +53,7 @@ class BLIPTextEncoder(nn.Module):
 if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
-    model = BLIPTextEncoder().to(device)
+    model = BLIPModel().to(device)
 
     text = "A photo of a cat"
     inputs = tokenizer(text, return_tensors="pt").to(device)
