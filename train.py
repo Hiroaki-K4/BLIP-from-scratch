@@ -88,7 +88,7 @@ def train(
     save_path="best_blip_model.pth",
     max_steps=500,
     batch_size=12,
-    learning_rate=3e-4,  # ViT-B learning rate as per BLIP paper
+    learning_rate=1e-5,
     weight_decay=0.05,
     val_interval=200,
     patience=3,
@@ -100,24 +100,7 @@ def train(
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=learning_rate, weight_decay=weight_decay
     )
-
-    # BLIP paper settings: warm-up + exponential decay with rate 0.85
-    warmup_steps = max_steps // 10  # 10% of training for warmup
-
-    # More standard approach: Use ExponentialLR after warmup
-    def lr_lambda(step):
-        if step < warmup_steps:
-            # Warm-up phase: linear increase
-            return float(step) / float(max(1, warmup_steps))
-        else:
-            # After warmup, use exponential decay
-            # Decay by 0.85 every 1000 steps (approximately every epoch for large datasets)
-            decay_interval = 1000
-            decay_count = (step - warmup_steps) // decay_interval
-            return 0.85**decay_count
-
-    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
-
+    
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
 
     train_loader = get_dataloader(
@@ -153,17 +136,14 @@ def train(
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        scheduler.step()  # Update learning rate
 
         total_loss += loss.item()
 
         if i > 0 and i % val_interval == 0:
             avg_train_loss = total_loss / (i + 1)
             current_val_loss = validate(model, val_loader, device)
-            current_lr = optimizer.param_groups[0]["lr"]
-
             print(
-                f"\nStep: {i} | Train Loss: {avg_train_loss:.4f} | Val Loss: {current_val_loss:.4f} | LR: {current_lr:.2e}"
+                f"\nStep: {i} | Train Loss: {avg_train_loss:.4f} | Val Loss: {current_val_loss:.4f}"
             )
             print(
                 f"  ITC Loss: {loss_itc.item():.4f} | ITM Loss: {loss_itm.item():.4f} | LM Loss: {loss_lm.item():.4f}"
