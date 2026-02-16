@@ -83,7 +83,12 @@ def validate(model, dataloader, device, num_val_steps=50):
     val_loss = 0
     with torch.no_grad():
         val_iter = itertools.islice(dataloader, num_val_steps)
-        for i, (images, input_ids, attention_mask) in enumerate(val_iter):
+        for i, batch in enumerate(val_iter):
+            # Skip batch if None (filtered out due to duplicate images)
+            if batch is None:
+                continue
+
+            images, input_ids, attention_mask = batch
             images, input_ids, attention_mask = (
                 images.to(device),
                 input_ids.to(device),
@@ -135,7 +140,12 @@ def train(
     model.train()
     total_loss = 0
 
-    for i, (images, input_ids, attention_mask) in enumerate(train_iter):
+    for i, batch in enumerate(train_iter):
+        # Skip batch if None (filtered out due to duplicate images)
+        if batch is None:
+            continue
+
+        images, input_ids, attention_mask = batch
         images, input_ids, attention_mask = (
             images.to(device),
             input_ids.to(device),
@@ -186,6 +196,7 @@ def train(
 
 
 if __name__ == "__main__":
+    # To create negative samples for ITM training, use a batch size of 2 or more.
     train(
         save_path="best_blip_model.pth",
         max_steps=30000,
