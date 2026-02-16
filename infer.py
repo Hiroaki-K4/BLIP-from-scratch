@@ -8,9 +8,23 @@ from blip import BLIP
 
 
 def generate_caption(
-    model, image_tensor, tokenizer, device, max_length=30, temperature=1.0
+    model,
+    image_tensor,
+    tokenizer,
+    device,
+    max_length=30,
+    use_sampling=False,
+    temperature=1.0,
+    repetition_penalty=1.5,
 ):
-    """Generate caption using LM mode - autoregressive text generation"""
+    """Generate caption using LM mode - autoregressive text generation
+
+    Args:
+        use_sampling: If False, uses greedy decoding (deterministic, like BLIP)
+                      If True, uses probabilistic sampling (non-deterministic)
+        temperature: Only used when use_sampling=True
+        repetition_penalty: Penalize repeated tokens (>1.0 reduces repetition)
+    """
     model.eval()
 
     # Start with [CLS] token
@@ -26,16 +40,27 @@ def generate_caption(
             lm_logits = model(image_tensor, input_ids, attention_mask, mode="lm")
 
             # Get logits for the last position (next token)
-            next_token_logits = lm_logits[0, -1, :] / temperature
+            next_token_logits = lm_logits[0, -1, :].clone()
 
-            # Sample next token based on probability distribution
-            if temperature == 0.0:
-                # Greedy decoding (deterministic)
-                next_token_id = torch.argmax(next_token_logits).item()
-            else:
-                # Probabilistic sampling (uses temperature effect)
+            # Apply repetition penalty to already generated tokens
+            if repetition_penalty != 1.0:
+                for token_id in set(generated_ids):
+                    # If token has positive logit, divide by penalty
+                    # If token has negative logit, multiply by penalty
+                    if next_token_logits[token_id] < 0:
+                        next_token_logits[token_id] *= repetition_penalty
+                    else:
+                        next_token_logits[token_id] /= repetition_penalty
+
+            # Select next token
+            if use_sampling:
+                # Probabilistic sampling (non-deterministic)
+                next_token_logits = next_token_logits / temperature
                 probs = F.softmax(next_token_logits, dim=-1)
                 next_token_id = torch.multinomial(probs, num_samples=1).item()
+            else:
+                # Greedy decoding (deterministic, like BLIP official)
+                next_token_id = torch.argmax(next_token_logits).item()
 
             # Stop if we hit [SEP] or [PAD]
             if next_token_id in [tokenizer.sep_token_id, tokenizer.pad_token_id]:
@@ -116,8 +141,14 @@ def inference(model_path, image_path, text_candidates, mode="itc"):
 
         elif mode == "lm":
             # LM mode: Language Model - Generate caption from image
+            # Use greedy decoding (deterministic, like BLIP official)
             generated_caption = generate_caption(
-                model, image_tensor, tokenizer, device, max_length=30
+                model,
+                image_tensor,
+                tokenizer,
+                device,
+                max_length=30,
+                use_sampling=False,
             )
             return generated_caption
 
