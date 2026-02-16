@@ -131,8 +131,26 @@ def train(
     print(f"Using device: {device}")
 
     model = BLIP().to(device)
+
+    # ITMヘッドだけ高い学習率を設定
+    itm_params = []
+    other_params = []
+
+    for name, param in model.named_parameters():
+        if "itm_head" in name:
+            itm_params.append(param)
+        else:
+            other_params.append(param)
+
     optimizer = torch.optim.AdamW(
-        model.parameters(), lr=learning_rate, weight_decay=weight_decay
+        [
+            {"params": other_params, "lr": learning_rate, "weight_decay": weight_decay},
+            {
+                "params": itm_params,
+                "lr": learning_rate * 10,
+                "weight_decay": weight_decay,
+            },  # 10倍の学習率
+        ]
     )
 
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
