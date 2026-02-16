@@ -8,7 +8,9 @@ from blip import BLIP
 from dataloader import get_dataloader
 
 
-def compute_losses(model, images, input_ids, attention_mask, device):
+def compute_losses(
+    model, images, input_ids, attention_mask, device, use_hard_negatives=True
+):
     """Compute all losses (ITC, ITM, LM) for given batch"""
     batch_size = images.size(0)
 
@@ -19,12 +21,27 @@ def compute_losses(model, images, input_ids, attention_mask, device):
     loss_t2i = F.cross_entropy(sim_t2i, targets)
     loss_itc = (loss_i2t + loss_t2i) / 2
 
-    # ITM loss
+    # ITM loss with improved negative sampling
     # Positive pair
     itm_output_pos = model(images, input_ids, attention_mask, mode="itm")
-    # Negative pair
-    input_ids_neg = torch.roll(input_ids, shifts=1, dims=0)
-    attn_mask_neg = torch.roll(attention_mask, shifts=1, dims=0)
+
+    if use_hard_negatives and batch_size > 1:
+        # Hard negative sampling based on ITC similarity
+        with torch.no_grad():
+            # Find most similar incorrect pairs
+            sim_matrix = sim_i2t.detach()
+            # Mask diagonal (correct pairs)
+            mask = torch.eye(batch_size, device=device).bool()
+            sim_matrix.masked_fill_(mask, -float("inf"))
+            # Get indices of most similar (hardest) negatives
+            hard_neg_indices = sim_matrix.argmax(dim=1)
+    else:
+        # Fallback to random negative sampling if batch too small
+        hard_neg_indices = torch.randperm(batch_size, device=device)
+
+    # Create negative pairs using hard negatives
+    input_ids_neg = input_ids[hard_neg_indices]
+    attn_mask_neg = attention_mask[hard_neg_indices]
     itm_output_neg = model(images, input_ids_neg, attn_mask_neg, mode="itm")
 
     # Combine logits and labels
@@ -100,7 +117,7 @@ def train(
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=learning_rate, weight_decay=weight_decay
     )
-    
+
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
 
     train_loader = get_dataloader(
@@ -171,7 +188,7 @@ def train(
 if __name__ == "__main__":
     train(
         save_path="best_blip_model.pth",
-        max_steps=10000,
+        max_steps=30000,
         batch_size=16,
         weight_decay=0.05,
         val_interval=200,
