@@ -25,8 +25,8 @@ def objective(trial):
     batch_size = 16
 
     # Training settings
-    max_steps = 10000  # Sufficient steps for convergence
-    val_interval = 1000
+    max_steps = 5000  # Balance between accuracy and speed
+    val_interval = 500
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -144,7 +144,7 @@ def tune_hyperparameters(n_trials=20, storage=None):
         load_if_exists=True,
         pruner=optuna.pruners.MedianPruner(
             n_startup_trials=5,  # Don't prune first 5 trials
-            n_warmup_steps=2000,  # Don't prune before step 2000
+            n_warmup_steps=1000,  # Don't prune before step 1000
         ),
     )
 
