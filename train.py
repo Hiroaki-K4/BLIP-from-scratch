@@ -8,9 +8,7 @@ from blip import BLIP
 from dataloader import get_dataloader
 
 
-def compute_losses(
-    model, images, input_ids, attention_mask, device, use_hard_negatives=True
-):
+def compute_losses(model, images, input_ids, attention_mask, device):
     """Compute all losses (ITC, ITM, LM) for given batch"""
     batch_size = images.size(0)
 
@@ -21,35 +19,52 @@ def compute_losses(
     loss_t2i = F.cross_entropy(sim_t2i, targets)
     loss_itc = (loss_i2t + loss_t2i) / 2
 
-    # ITM loss with improved negative sampling
-    # Positive pair
+    # ITM loss - following BLIP official implementation
+    # Positive pairs
     itm_output_pos = model(images, input_ids, attention_mask, mode="itm")
 
-    if use_hard_negatives and batch_size > 1:
-        # Hard negative sampling based on ITC similarity
-        with torch.no_grad():
-            # Find most similar incorrect pairs
-            sim_matrix = sim_i2t.detach()
-            # Mask diagonal (correct pairs)
-            mask = torch.eye(batch_size, device=device).bool()
-            sim_matrix.masked_fill_(mask, -float("inf"))
-            # Get indices of most similar (hardest) negatives
-            hard_neg_indices = sim_matrix.argmax(dim=1)
-    else:
-        # Fallback to random negative sampling if batch too small
-        hard_neg_indices = torch.randperm(batch_size, device=device)
+    # Probabilistic negative sampling based on ITC similarity (like BLIP)
+    with torch.no_grad():
+        # Create probability distribution from similarity (higher similarity = higher probability)
+        weights_t2i = F.softmax(sim_t2i[:, :batch_size], dim=1) + 1e-4
+        weights_t2i.fill_diagonal_(0)  # Don't sample yourself
 
-    # Create negative pairs using hard negatives
-    input_ids_neg = input_ids[hard_neg_indices]
-    attn_mask_neg = attention_mask[hard_neg_indices]
-    itm_output_neg = model(images, input_ids_neg, attn_mask_neg, mode="itm")
+        weights_i2t = F.softmax(sim_i2t[:, :batch_size], dim=1) + 1e-4
+        weights_i2t.fill_diagonal_(0)
 
-    # Combine logits and labels
-    itm_logits = torch.cat([itm_output_pos, itm_output_neg], dim=0)
+    # Select negative image for each text (image-negative pairs)
+    image_neg_indices = []
+    for b in range(batch_size):
+        neg_idx = torch.multinomial(weights_t2i[b], 1).item()
+        image_neg_indices.append(neg_idx)
+    image_neg_indices = torch.tensor(image_neg_indices, device=device)
+
+    # Select negative text for each image (text-negative pairs)
+    text_neg_indices = []
+    for b in range(batch_size):
+        neg_idx = torch.multinomial(weights_i2t[b], 1).item()
+        text_neg_indices.append(neg_idx)
+    text_neg_indices = torch.tensor(text_neg_indices, device=device)
+
+    # Generate negative pairs
+    # 1. Wrong image with correct text
+    images_neg = images[image_neg_indices]
+    itm_output_neg_img = model(images_neg, input_ids, attention_mask, mode="itm")
+
+    # 2. Correct image with wrong text
+    input_ids_neg = input_ids[text_neg_indices]
+    attn_mask_neg = attention_mask[text_neg_indices]
+    itm_output_neg_txt = model(images, input_ids_neg, attn_mask_neg, mode="itm")
+
+    # Combine: positive + 2 types of negatives (ratio 1:2 like BLIP)
+    itm_logits = torch.cat(
+        [itm_output_pos, itm_output_neg_img, itm_output_neg_txt], dim=0
+    )
     itm_labels = torch.cat(
         [
-            torch.ones(batch_size, dtype=torch.long),
-            torch.zeros(batch_size, dtype=torch.long),
+            torch.ones(batch_size, dtype=torch.long),  # Positive
+            torch.zeros(batch_size, dtype=torch.long),  # Image negative
+            torch.zeros(batch_size, dtype=torch.long),  # Text negative
         ],
         dim=0,
     ).to(device)
@@ -63,7 +78,13 @@ def compute_losses(
 
         # Accuracy for positive and negative separately
         pos_acc = (itm_preds[:batch_size] == 1).float().mean()
-        neg_acc = (itm_preds[batch_size:] == 0).float().mean()
+        neg_acc = (
+            (itm_preds[batch_size:] == 0).float().mean()
+        )  # Both types of negatives
+
+        # Separate accuracy for image-negative and text-negative
+        neg_img_acc = (itm_preds[batch_size : 2 * batch_size] == 0).float().mean()
+        neg_txt_acc = (itm_preds[2 * batch_size :] == 0).float().mean()
 
         # Average confidence for match class
         match_confidence = itm_probs[:, 1].mean()
@@ -73,6 +94,8 @@ def compute_losses(
         "acc": itm_acc.item(),
         "pos_acc": pos_acc.item(),
         "neg_acc": neg_acc.item(),
+        "neg_img_acc": neg_img_acc.item(),
+        "neg_txt_acc": neg_txt_acc.item(),
         "match_conf": match_confidence.item(),
     }
 
