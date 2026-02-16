@@ -21,6 +21,10 @@ class BLIPModel(nn.Module):
 
         self.text_proj = nn.Linear(hidden_dim, embed_dim)
         self.itm_head = nn.Linear(hidden_dim, 2)
+        # Better initialization for ITM head
+        nn.init.xavier_normal_(self.itm_head.weight)
+        nn.init.constant_(self.itm_head.bias, 0)
+
         self.lm_head = nn.Linear(hidden_dim, self.config.vocab_size)
 
     def _share_weights(self):
