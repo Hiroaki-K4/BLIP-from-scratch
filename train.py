@@ -81,6 +81,10 @@ def validate(model, dataloader, device, num_val_steps=50):
     """Calculate loss for validation data"""
     model.eval()
     val_loss = 0
+    val_loss_itc = 0
+    val_loss_itm = 0
+    val_loss_lm = 0
+
     with torch.no_grad():
         val_iter = itertools.islice(dataloader, num_val_steps)
         for i, batch in enumerate(val_iter):
@@ -101,9 +105,17 @@ def validate(model, dataloader, device, num_val_steps=50):
             )
 
             val_loss += (loss_itc + loss_itm + loss_lm).item()
+            val_loss_itc += loss_itc.item()
+            val_loss_itm += loss_itm.item()
+            val_loss_lm += loss_lm.item()
 
     model.train()
-    return val_loss / num_val_steps
+    return (
+        val_loss / num_val_steps,
+        val_loss_itc / num_val_steps,
+        val_loss_itm / num_val_steps,
+        val_loss_lm / num_val_steps,
+    )
 
 
 def train(
@@ -167,13 +179,15 @@ def train(
         total_loss += loss.item()
 
         if i > 0 and i % val_interval == 0:
-            avg_train_loss = total_loss / (i + 1)
-            current_val_loss = validate(model, val_loader, device)
-            print(
-                f"\nStep: {i} | Train Loss: {avg_train_loss:.4f} | Val Loss: {current_val_loss:.4f}"
+            current_train_loss = loss.item()
+            current_val_loss, val_loss_itc, val_loss_itm, val_loss_lm = validate(
+                model, val_loader, device
             )
             print(
-                f"  ITC Loss: {loss_itc.item():.4f} | ITM Loss: {loss_itm.item():.4f} | LM Loss: {loss_lm.item():.4f}"
+                f"\nStep: {i} | Train Loss: {current_train_loss:.4f} | Val Loss: {current_val_loss:.4f}"
+            )
+            print(
+                f"  Val ITC Loss: {val_loss_itc:.4f} | Val ITM Loss: {val_loss_itm:.4f} | Val LM Loss: {val_loss_lm:.4f}"
             )
 
             # Early Stopping
