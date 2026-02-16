@@ -55,6 +55,27 @@ def compute_losses(
     ).to(device)
     loss_itm = F.cross_entropy(itm_logits, itm_labels)
 
+    # Debug: Calculate ITM accuracy and prediction stats
+    with torch.no_grad():
+        itm_probs = F.softmax(itm_logits, dim=1)
+        itm_preds = itm_logits.argmax(dim=1)
+        itm_acc = (itm_preds == itm_labels).float().mean()
+
+        # Accuracy for positive and negative separately
+        pos_acc = (itm_preds[:batch_size] == 1).float().mean()
+        neg_acc = (itm_preds[batch_size:] == 0).float().mean()
+
+        # Average confidence for match class
+        match_confidence = itm_probs[:, 1].mean()
+
+    # Return debug info as well
+    itm_debug = {
+        "acc": itm_acc.item(),
+        "pos_acc": pos_acc.item(),
+        "neg_acc": neg_acc.item(),
+        "match_conf": match_confidence.item(),
+    }
+
     # LM loss (Language Modeling)
     # Create labels for language modeling (shifted input_ids)
     lm_labels = input_ids.clone()
@@ -74,7 +95,7 @@ def compute_losses(
         ignore_index=-100,
     )
 
-    return loss_itc, loss_itm, loss_lm
+    return loss_itc, loss_itm, loss_lm, itm_debug
 
 
 def validate(model, dataloader, device, num_val_steps=50):
@@ -100,7 +121,7 @@ def validate(model, dataloader, device, num_val_steps=50):
             )
 
             # Compute all losses using the shared function
-            loss_itc, loss_itm, loss_lm = compute_losses(
+            loss_itc, loss_itm, loss_lm, _ = compute_losses(
                 model, images, input_ids, attention_mask, device
             )
 
@@ -131,26 +152,8 @@ def train(
     print(f"Using device: {device}")
 
     model = BLIP().to(device)
-
-    # ITMヘッドだけ高い学習率を設定
-    itm_params = []
-    other_params = []
-
-    for name, param in model.named_parameters():
-        if "itm_head" in name:
-            itm_params.append(param)
-        else:
-            other_params.append(param)
-
     optimizer = torch.optim.AdamW(
-        [
-            {"params": other_params, "lr": learning_rate, "weight_decay": weight_decay},
-            {
-                "params": itm_params,
-                "lr": learning_rate * 10,
-                "weight_decay": weight_decay,
-            },  # 10倍の学習率
-        ]
+        model.parameters(), lr=learning_rate, weight_decay=weight_decay
     )
 
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
@@ -183,7 +186,7 @@ def train(
         )
 
         # Compute all losses using the shared function
-        loss_itc, loss_itm, loss_lm = compute_losses(
+        loss_itc, loss_itm, loss_lm, itm_debug = compute_losses(
             model, images, input_ids, attention_mask, device
         )
 
@@ -206,6 +209,9 @@ def train(
             )
             print(
                 f"  Val ITC Loss: {val_loss_itc:.4f} | Val ITM Loss: {val_loss_itm:.4f} | Val LM Loss: {val_loss_lm:.4f}"
+            )
+            print(
+                f"  ITM Debug - Acc: {itm_debug['acc']:.3f} | Pos Acc: {itm_debug['pos_acc']:.3f} | Neg Acc: {itm_debug['neg_acc']:.3f} | Match Conf: {itm_debug['match_conf']:.3f}"
             )
 
             # Early Stopping
