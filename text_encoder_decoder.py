@@ -58,19 +58,6 @@ class BLIPModel(nn.Module):
             last_hidden_state = outputs.last_hidden_state[:, 0, :]
             return self.text_proj(last_hidden_state)
         elif mode == "itm":
-            # outputs = self.itm_bert(
-            #     input_ids=input_ids,
-            #     attention_mask=attention_mask,
-            #     encoder_hidden_states=visual_embeds,
-            # )
-            # extended_attention_mask = self.base_bert.get_extended_attention_mask(
-            #     attention_mask, input_ids.size(), device=input_ids.device
-            # )
-            # outputs = self.itm_bert(
-            #     input_ids=input_ids,
-            #     attention_mask=extended_attention_mask,
-            #     encoder_hidden_states=visual_embeds,
-            # )
             embedding_output = self.itm_bert.embeddings(input_ids=input_ids)
             extended_attention_mask = self.base_bert.get_extended_attention_mask(
                 attention_mask, input_ids.size()
@@ -81,7 +68,6 @@ class BLIPModel(nn.Module):
                 encoder_hidden_states=visual_embeds,
             )
             return self.itm_head(encoder_outputs.last_hidden_state[:, 0, :])
-            # return self.itm_head(outputs.last_hidden_state[:, 0, :])
         elif mode == "lm":
             outputs = self.text_decoder(
                 input_ids=input_ids,
