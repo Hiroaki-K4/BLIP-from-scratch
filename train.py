@@ -139,10 +139,10 @@ def validate(model, dataloader, device, num_val_steps=50):
 def train(
     save_path="best_blip_model.pth",
     max_steps=500,
-    batch_size=12,
+    batch_size=16,
     learning_rate=2e-5,
-    weight_decay=0.05,
-    val_interval=200,
+    weight_decay=0.044,
+    val_interval=500,
     patience=3,
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -237,6 +237,6 @@ if __name__ == "__main__":
         max_steps=30000,
         batch_size=16,
         weight_decay=0.044,
-        val_interval=200,
+        val_interval=500,
         patience=3,
     )
