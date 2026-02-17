@@ -18,7 +18,7 @@ def objective(trial):
     """Optuna objective function for hyperparameter search"""
 
     # Suggest hyperparameters
-    learning_rate = trial.suggest_float("learning_rate", 1e-6, 1e-4, log=True)
+    learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-4, log=True)
     weight_decay = trial.suggest_float("weight_decay", 0.01, 0.1)
 
     # Fixed parameters
@@ -81,7 +81,7 @@ def objective(trial):
             val_loss_lm = 0
 
             with torch.no_grad():
-                val_iter = itertools.islice(val_loader, 50)
+                val_iter = itertools.islice(val_loader, 30)
                 for val_batch in val_iter:
                     if val_batch is None:
                         continue
@@ -102,10 +102,10 @@ def objective(trial):
                     val_loss_lm += v_loss_lm.item()
                     val_loss += (v_loss_itc + v_loss_itm + v_loss_lm).item()
 
-            avg_val_loss = val_loss / 50
-            avg_val_loss_itc = val_loss_itc / 50
-            avg_val_loss_itm = val_loss_itm / 50
-            avg_val_loss_lm = val_loss_lm / 50
+            avg_val_loss = val_loss / 30
+            avg_val_loss_itc = val_loss_itc / 30
+            avg_val_loss_itm = val_loss_itm / 30
+            avg_val_loss_lm = val_loss_lm / 30
 
             model.train()
 
@@ -128,7 +128,7 @@ def objective(trial):
     return best_val_loss
 
 
-def tune_hyperparameters(n_trials=20, storage=None):
+def tune_hyperparameters(n_trials=10, storage=None):
     """Run hyperparameter tuning with Optuna
 
     Args:
@@ -143,8 +143,8 @@ def tune_hyperparameters(n_trials=20, storage=None):
         storage=storage,
         load_if_exists=True,
         pruner=optuna.pruners.MedianPruner(
-            n_startup_trials=5,  # Don't prune first 5 trials
-            n_warmup_steps=1000,  # Don't prune before step 1000
+            n_startup_trials=3,  # Don't prune first 3 trials
+            n_warmup_steps=500,  # Don't prune before step 500
         ),
     )
 
@@ -192,7 +192,7 @@ if __name__ == "__main__":
     # Use SQLite for persistence (optional)
     storage = "sqlite:///blip_optuna.db"
 
-    study = tune_hyperparameters(n_trials=20, storage=storage)
+    study = tune_hyperparameters(n_trials=10, storage=storage)
 
     # You can also visualize results (requires optuna-dashboard or plotly)
     # optuna.visualization.plot_optimization_history(study).show()
