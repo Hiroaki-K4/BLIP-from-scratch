@@ -140,7 +140,7 @@ def train(
     save_path="best_blip_model.pth",
     max_steps=500,
     batch_size=12,
-    learning_rate=1e-5,
+    learning_rate=2e-5,
     weight_decay=0.05,
     val_interval=200,
     patience=3,
@@ -236,7 +236,7 @@ if __name__ == "__main__":
         save_path="best_blip_model.pth",
         max_steps=30000,
         batch_size=16,
-        weight_decay=0.05,
+        weight_decay=0.044,
         val_interval=200,
         patience=3,
     )
