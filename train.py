@@ -234,9 +234,9 @@ if __name__ == "__main__":
     # To create negative samples for ITM training, use a batch size of 2 or more.
     train(
         save_path="best_blip_model.pth",
-        max_steps=30000,
+        max_steps=300000,
         batch_size=16,
         weight_decay=0.044,
-        val_interval=500,
+        val_interval=1000,
         patience=3,
     )
