@@ -1,8 +1,33 @@
 # BLIP from Scratch
 
-A PyTorch implementation of BLIP (Bootstrapping Language-Image Pre-training) built from scratch for image-text understanding and caption generation.
+A PyTorch implementation of [BLIP (Bootstrapping Language-Image Pre-training)](https://arxiv.org/pdf/2201.12086) built from scratch for image-text understanding and caption generation.
 
 ## 🌟 Overview
+
+### What is BLIP?
+
+**BLIP (Bootstrapping Language-Image Pre-training)** is a state-of-the-art vision-language model developed by Salesforce Research in 2022. It bridges the gap between computer vision and natural language processing by enabling machines to understand the relationship between images and text.
+
+**Key Innovations:**
+
+- **Unified Architecture**: Unlike previous models that required separate architectures for understanding (e.g., image-text retrieval) and generation (e.g., image captioning) tasks, BLIP uses a single unified framework for both.
+
+- **Multi-Task Learning**: BLIP jointly trains on three complementary objectives:
+  - Understanding the semantic similarity between images and text
+  - Matching images with their correct descriptions
+  - Generating natural language captions from images
+
+- **Real-World Applications**: BLIP powers various applications including:
+  - Image search engines (finding images based on text queries)
+  - Accessibility tools (generating descriptions for visually impaired users)
+  - Content moderation (understanding image-text relationships)
+  - Multimodal AI assistants (reasoning about images and text together)
+
+**Why BLIP Matters:**
+
+Traditional vision-language models often excelled at either understanding OR generation, but not both. BLIP's unified approach enables it to leverage knowledge across tasks—insights from matching improve captioning, and vice versa. This makes BLIP more data-efficient and versatile than specialized models.
+
+### This Implementation
 
 This project implements the BLIP model, a vision-language model that unifies understanding and generation tasks. The model is trained on the MS COCO dataset and supports three key modes:
 
@@ -60,11 +85,11 @@ uv run python train.py
 ```
 
 **Training Parameters:**
-- Max steps: 30,000
+- Max steps: 30000
 - Batch size: 16
-- Learning rate: 1e-5
-- Weight decay: 0.05
-- Validation interval: 200 steps
+- Learning rate: 2e-5
+- Weight decay: 0.044
+- Validation interval: 500 steps
 - Early stopping patience: 3
 
 The best model will be saved as `best_blip_model.pth`.
