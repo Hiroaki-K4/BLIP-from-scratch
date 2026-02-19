@@ -1,3 +1,5 @@
+import itertools
+
 import torch
 import torch.nn.functional as F
 from transformers import BertTokenizer
