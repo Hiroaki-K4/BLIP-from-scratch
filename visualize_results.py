@@ -172,8 +172,8 @@ if __name__ == "__main__":
     image_path = "original/caption.jpg"
     text_candidates = [
         "A sunset over the ocean",
-        "A man petting a dog",
-        "A person riding a bicycle",
+        "A man riding a motor bike on a dirt road on the countryside",
+        "A person playing the guitar",
         "A futuristic city with flying cars",
     ]
 
