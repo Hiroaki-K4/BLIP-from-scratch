@@ -1,5 +1,3 @@
-import itertools
-
 import torch
 import torch.nn.functional as F
 from transformers import BertTokenizer
@@ -161,73 +159,88 @@ def train(
     val_loader = get_dataloader(
         tokenizer=tokenizer, batch_size=batch_size, split="validation"
     )
-    train_iter = itertools.islice(train_loader, max_steps)
 
     # Variables for Early Stopping
     best_val_loss = float("inf")
     counter = 0
+    step = 0  # Track actual training steps
 
     model.train()
     total_loss = 0
 
-    for i, batch in enumerate(train_iter):
-        # Skip batch if None (filtered out due to duplicate images)
-        if batch is None:
-            continue
+    print(f"Starting training for max {max_steps} steps...")
 
-        images, input_ids, attention_mask = batch
-        images, input_ids, attention_mask = (
-            images.to(device),
-            input_ids.to(device),
-            attention_mask.to(device),
-        )
+    # Loop infinitely through the dataset
+    while step < max_steps:
+        for i, batch in enumerate(train_loader):
+            # Skip batch if None (filtered out due to duplicate images)
+            if batch is None:
+                continue
 
-        # Compute all losses using the shared function
-        loss_itc, loss_itm, loss_lm, itm_debug = compute_losses(
-            model, images, input_ids, attention_mask, device
-        )
-
-        # Total loss: combine all three losses
-        loss = loss_itc + loss_itm + loss_lm
-
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-        total_loss += loss.item()
-
-        if i > 0 and i % val_interval == 0:
-            current_train_loss = loss.item()
-            current_val_loss, val_loss_itc, val_loss_itm, val_loss_lm = validate(
-                model, val_loader, device
-            )
-            print(
-                f"\nStep: {i} | Train Loss: {current_train_loss:.4f} | Val Loss: {current_val_loss:.4f}"
-            )
-            print(
-                f"  Val ITC Loss: {val_loss_itc:.4f} | Val ITM Loss: {val_loss_itm:.4f} | Val LM Loss: {val_loss_lm:.4f}"
-            )
-            print(
-                f"  ITM Debug - Acc: {itm_debug['acc']:.3f} | Pos Acc: {itm_debug['pos_acc']:.3f} | Neg Acc: {itm_debug['neg_acc']:.3f} | Match Conf: {itm_debug['match_conf']:.3f}"
-            )
-
-            # Early Stopping
-            if current_val_loss < best_val_loss:
-                best_val_loss = current_val_loss
-                counter = 0
-                torch.save(model.state_dict(), save_path)
-                print(f"--> Best model saved (Loss improved).")
-            else:
-                counter += 1
-                print(
-                    f"--> No improvement. EarlyStopping counter: {counter}/{patience}"
-                )
-
-            if counter >= patience:
-                print("Early stopping triggered. Training finished.")
+            # Check if we've reached max_steps
+            if step >= max_steps:
+                print(f"Reached max_steps ({max_steps}). Training finished.")
                 break
 
+            images, input_ids, attention_mask = batch
+            images, input_ids, attention_mask = (
+                images.to(device),
+                input_ids.to(device),
+                attention_mask.to(device),
+            )
+
+            # Compute all losses using the shared function
+            loss_itc, loss_itm, loss_lm, itm_debug = compute_losses(
+                model, images, input_ids, attention_mask, device
+            )
+
+            # Total loss: combine all three losses
+            loss = loss_itc + loss_itm + loss_lm
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            total_loss += loss.item()
+            step += 1
+
+            if step > 0 and step % val_interval == 0:
+                current_train_loss = loss.item()
+                current_val_loss, val_loss_itc, val_loss_itm, val_loss_lm = validate(
+                    model, val_loader, device
+                )
+                print(
+                    f"\nStep: {step} | Train Loss: {current_train_loss:.4f} | Val Loss: {current_val_loss:.4f}"
+                )
+                print(
+                    f"  Val ITC Loss: {val_loss_itc:.4f} | Val ITM Loss: {val_loss_itm:.4f} | Val LM Loss: {val_loss_lm:.4f}"
+                )
+                print(
+                    f"  ITM Debug - Acc: {itm_debug['acc']:.3f} | Pos Acc: {itm_debug['pos_acc']:.3f} | Neg Acc: {itm_debug['neg_acc']:.3f} | Match Conf: {itm_debug['match_conf']:.3f}"
+                )
+
+                # Early Stopping
+                if current_val_loss < best_val_loss:
+                    best_val_loss = current_val_loss
+                    counter = 0
+                    torch.save(model.state_dict(), save_path)
+                    print(f"--> Best model saved (Loss improved).")
+                else:
+                    counter += 1
+                    print(
+                        f"--> No improvement. EarlyStopping counter: {counter}/{patience}"
+                    )
+
+                if counter >= patience:
+                    print("Early stopping triggered. Training finished.")
+                    return  # Exit the function completely
+
+        # Check if we broke out of inner loop due to max_steps
+        if step >= max_steps:
+            break
+
     print(f"\nTraining complete. Best Val Loss: {best_val_loss:.4f}")
+    print(f"Final training steps: {step}/{max_steps}")
 
 
 if __name__ == "__main__":
