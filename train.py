@@ -95,16 +95,21 @@ def compute_losses(model, images, input_ids, attention_mask, device):
     return loss_itc, loss_itm, loss_lm, itm_debug
 
 
-def validate(model, dataloader, device, num_val_steps=50):
-    """Calculate loss for validation data"""
+def validate(model, tokenizer, batch_size, device, num_val_steps=50):
+    """Calculate loss for validation data - creates fresh dataloader each time"""
     model.eval()
     val_loss = 0
     val_loss_itc = 0
     val_loss_itm = 0
     val_loss_lm = 0
 
+    # Create fresh validation dataloader to avoid data exhaustion
+    val_loader = get_dataloader(
+        tokenizer=tokenizer, batch_size=batch_size, split="validation"
+    )
+
     with torch.no_grad():
-        val_iter = itertools.islice(dataloader, num_val_steps)
+        val_iter = itertools.islice(val_loader, num_val_steps)
         for i, batch in enumerate(val_iter):
             # Skip batch if None (filtered out due to duplicate images)
             if batch is None:
@@ -209,7 +214,7 @@ def train(
             if step > 0 and step % val_interval == 0:
                 current_train_loss = loss.item()
                 current_val_loss, val_loss_itc, val_loss_itm, val_loss_lm = validate(
-                    model, val_loader, device
+                    model, tokenizer, batch_size, device
                 )
                 print(
                     f"\nStep: {step} | Train Loss: {current_train_loss:.4f} | Val Loss: {current_val_loss:.4f}"
