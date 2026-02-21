@@ -45,7 +45,6 @@ This project implements the BLIP model, a vision-language model that unifies und
 - ✅ BERT-based text encoder/decoder with cross-attention
 - ✅ Weight sharing between encoder and decoder components
 - ✅ Probabilistic negative sampling for ITM training
-- ✅ Autoregressive caption generation with repetition penalty
 - ✅ Early stopping and validation monitoring
 - ✅ Hyperparameter tuning with Optuna
 
@@ -85,11 +84,11 @@ uv run python train.py
 ```
 
 **Training Parameters:**
-- Max steps: 30000
+- Max steps: 300000
 - Batch size: 16
 - Learning rate: 2e-5
 - Weight decay: 0.044
-- Validation interval: 500 steps
+- Validation interval: 1000 steps
 - Early stopping patience: 3
 
 The best model will be saved as `best_blip_model.pth`.
@@ -148,7 +147,6 @@ caption = generate_caption(
     max_length=30,
     use_sampling=False,      # True for probabilistic sampling
     temperature=1.0,         # Controls randomness (when sampling)
-    repetition_penalty=1.5   # Reduces repetition (>1.0)
 )
 ```
 

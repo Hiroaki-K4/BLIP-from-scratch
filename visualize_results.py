@@ -64,7 +64,6 @@ def visualize_inference(
         device,
         max_length=30,
         use_sampling=False,
-        repetition_penalty=1.5,
     )
 
     # Create visualization

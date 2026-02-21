@@ -15,7 +15,6 @@ def generate_caption(
     max_length=30,
     use_sampling=False,
     temperature=1.0,
-    repetition_penalty=1.5,
 ):
     """Generate caption using LM mode - autoregressive text generation
 
@@ -23,7 +22,6 @@ def generate_caption(
         use_sampling: If False, uses greedy decoding (deterministic, like BLIP)
                       If True, uses probabilistic sampling (non-deterministic)
         temperature: Only used when use_sampling=True
-        repetition_penalty: Penalize repeated tokens (>1.0 reduces repetition)
     """
     model.eval()
 
@@ -41,16 +39,6 @@ def generate_caption(
 
             # Get logits for the last position (next token)
             next_token_logits = lm_logits[0, -1, :].clone()
-
-            # Apply repetition penalty to already generated tokens
-            if repetition_penalty != 1.0:
-                for token_id in set(generated_ids):
-                    # If token has positive logit, divide by penalty
-                    # If token has negative logit, multiply by penalty
-                    if next_token_logits[token_id] < 0:
-                        next_token_logits[token_id] *= repetition_penalty
-                    else:
-                        next_token_logits[token_id] /= repetition_penalty
 
             # Select next token
             if use_sampling:
