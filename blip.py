@@ -3,14 +3,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from image_encoder import BLIPImageEncoder
-from text_encoder import BLIPTextEncoder
+from text_encoder_decoder import BLIPModel
 
 
-class BLIP_MODEL(nn.Module):
+class BLIP(nn.Module):
     def __init__(self, embed_dim=256):
         super().__init__()
         self.visual_encoder = BLIPImageEncoder(pretrained=True)
-        self.text_encoder = BLIPTextEncoder(embed_dim=embed_dim)
+        self.text_encoder = BLIPModel(embed_dim=embed_dim)
         self.temp = nn.Parameter(torch.ones([]) * 0.07)
 
     def forward(self, image, input_ids, attention_mask, mode="itc"):
@@ -27,8 +27,12 @@ class BLIP_MODEL(nn.Module):
             sim_i2t = image_feat @ text_feat.t() * t
             sim_t2i = text_feat @ image_feat.t() * t
             return sim_i2t, sim_t2i
-
         elif mode == "itm":
             return self.text_encoder(
                 input_ids, attention_mask, visual_embeds=image_embeds, mode="itm"
+            )
+        elif mode == "lm":
+            # Language Model mode: Generate text conditioned on image
+            return self.text_encoder(
+                input_ids, attention_mask, visual_embeds=image_embeds, mode="lm"
             )

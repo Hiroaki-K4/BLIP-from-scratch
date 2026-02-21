@@ -28,15 +28,49 @@ def get_dataloader(tokenizer, batch_size=8, split="train"):
     def collate_fn(batch):
         images = []
         captions = []
+        image_ids = []  # Track image IDs
+
         for item in batch:
             images.append(transform(item["image"].convert("RGB")))
             captions.append(item["caption"])
+            # Get image ID (for COCO dataset)
+            image_ids.append(
+                item.get("image_id", id(item["image"]))
+            )  # fallback to object id
+
+        # Check for duplicate images within batch
+        unique_ids = set()
+        filtered_images = []
+        filtered_captions = []
+
+        for i, img_id in enumerate(image_ids):
+            if img_id not in unique_ids:
+                unique_ids.add(img_id)
+                filtered_images.append(images[i])
+                filtered_captions.append(captions[i])
+
+        # Skip batch if too few samples after deduplication
+        if len(filtered_images) < 2:
+            return None  # Skip this batch
 
         tokenized = tokenizer(
-            captions, padding=True, truncation=True, max_length=30, return_tensors="pt"
+            filtered_captions,
+            padding=True,
+            truncation=True,
+            max_length=30,
+            return_tensors="pt",
         )
-        return torch.stack(images), tokenized["input_ids"], tokenized["attention_mask"]
+        return (
+            torch.stack(filtered_images),
+            tokenized["input_ids"],
+            tokenized["attention_mask"],
+        )
 
     dataset = dataset.shuffle(seed=42, buffer_size=1000)
-    loader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn)
+    loader = DataLoader(
+        dataset,
+        batch_size=batch_size,
+        collate_fn=collate_fn,
+        drop_last=True,  # Exclude incomplete batches
+    )
     return loader
